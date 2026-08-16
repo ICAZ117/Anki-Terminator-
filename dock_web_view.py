@@ -1191,9 +1191,10 @@ setInterval(findAndClickButton, 2000);
 
         placeholders = re.findall(r"\{([^{}]+)\}", prompt_template)
         for placeholder in placeholders:
-            field_name = placeholder.strip()
-            if field_name in field_map or field_name.lower() in lower_field_map:
-                return True
+            field_name_candidates = [name.strip() for name in placeholder.split("|") if name.strip()]
+            for field_name in field_name_candidates:
+                if field_name in field_map or field_name.lower() in lower_field_map:
+                    return True
 
         return False
 
@@ -1214,13 +1215,14 @@ setInterval(findAndClickButton, 2000);
             prompt_text = prompt_text.replace("{}", "'" + fallback_text + "'")
 
         def replace_named_placeholder(match):
-            field_name = match.group(1).strip()
-            if field_name in field_map:
-                return field_map[field_name]
+            field_name_candidates = [name.strip() for name in match.group(1).split("|") if name.strip()]
+            for field_name in field_name_candidates:
+                if field_name in field_map:
+                    return field_map[field_name]
 
-            lower_field_name = field_name.lower()
-            if lower_field_name in lower_field_map:
-                return lower_field_map[lower_field_name]
+                lower_field_name = field_name.lower()
+                if lower_field_name in lower_field_map:
+                    return lower_field_map[lower_field_name]
 
             return match.group(0)
 
