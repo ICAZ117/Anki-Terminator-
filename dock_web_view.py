@@ -991,12 +991,24 @@ setInterval(findAndClickButton, 2000);
             config = mw.addonManager.getConfig(__name__)
             more_info = config[set_text]
             more_info = random.choice(more_info)
+
+            body_has_card_context = (
+                "{}" in more_info
+                or self.template_has_card_field_placeholder(more_info, self.last_card_note)
+            )
+
             prompt_text = self.build_prompt_text(
                 prompt_template=more_info,
                 fallback_text=self.last_text,
                 note=self.last_card_note,
+                prepend_fallback_if_no_placeholder=False,
             )
-            self.handle_load_finished(prompt_text=prompt_text, click=True)
+            self.handle_load_finished(
+                prompt_text=prompt_text,
+                click=True,
+                fallback_text=self.last_text,
+                body_has_card_context=body_has_card_context,
+            )
 
 
     def wrap_with_quotes(self,text):
@@ -1109,12 +1121,23 @@ setInterval(findAndClickButton, 2000);
 
         note_field_text = card.note()[first_field_name]
         self.set_last_text(note_field_text)
+
+        body_has_card_context = (
+            "{}" in selected_prompt
+            or self.template_has_card_field_placeholder(selected_prompt, note)
+        )
+
         prompt_text = self.build_prompt_text(
             prompt_template=selected_prompt,
             fallback_text=note_field_text,
             note=note,
+            prepend_fallback_if_no_placeholder=False,
         )
-        self.handle_load_finished(prompt_text)
+        self.handle_load_finished(
+            prompt_text=prompt_text,
+            fallback_text=note_field_text,
+            body_has_card_context=body_has_card_context,
+        )
 
     # ------------------------------------------------
 
@@ -1158,7 +1181,29 @@ setInterval(findAndClickButton, 2000);
         lower_field_map = {name.lower(): value for name, value in field_map.items()}
         return field_map, lower_field_map
 
-    def build_prompt_text(self, prompt_template: str, fallback_text: str = "", note=None):
+    def template_has_card_field_placeholder(self, prompt_template: str, note=None):
+        if not prompt_template:
+            return False
+
+        field_map, lower_field_map = self.get_note_field_map(note)
+        if not field_map:
+            return False
+
+        placeholders = re.findall(r"\{([^{}]+)\}", prompt_template)
+        for placeholder in placeholders:
+            field_name = placeholder.strip()
+            if field_name in field_map or field_name.lower() in lower_field_map:
+                return True
+
+        return False
+
+    def build_prompt_text(
+        self,
+        prompt_template: str,
+        fallback_text: str = "",
+        note=None,
+        prepend_fallback_if_no_placeholder: bool = True,
+    ):
         has_legacy_placeholder = "{}" in prompt_template
         has_named_placeholder = bool(re.search(r"\{[^{}]+\}", prompt_template))
 
@@ -1184,7 +1229,10 @@ setInterval(findAndClickButton, 2000);
         if has_legacy_placeholder or has_named_placeholder:
             return prompt_text
 
-        return fallback_text + prompt_text
+        if prepend_fallback_if_no_placeholder:
+            return fallback_text + prompt_text
+
+        return prompt_text
 
     def get_priority_tag(self, config):
         Priority_tag_list = config["Priority_tag_list"]
@@ -1237,13 +1285,20 @@ setInterval(findAndClickButton, 2000);
 
 
     ### send prompt ###
-    def handle_load_finished(self, prompt_text:str, click=False):
+    def handle_load_finished(
+        self,
+        prompt_text: str,
+        click=False,
+        fallback_text: str = "",
+        body_has_card_context: bool = False,
+    ):
         config = mw.addonManager.getConfig(__name__)
 
         if not (config["submit_text"] or click):
             return
 
         no_auto_press_send_button = config.get("no_auto_press_send_button", False)
+        prefix_has_card_context = False
 
         if config["change_Language"]:
             random_prompt_lang = config["language"]
@@ -1251,8 +1306,15 @@ setInterval(findAndClickButton, 2000);
             lang = shige_tr.lang
             print(lang)
 
-            if '{}' in selected_prompt_lang:
-                selected_prompt_lang = selected_prompt_lang.replace('{}', lang if lang else "")
+            if self.template_has_card_field_placeholder(selected_prompt_lang, self.last_card_note):
+                prefix_has_card_context = True
+
+            selected_prompt_lang = self.build_prompt_text(
+                prompt_template=selected_prompt_lang,
+                fallback_text=lang if lang else "",
+                note=self.last_card_note,
+                prepend_fallback_if_no_placeholder=False,
+            )
             prompt_text  = prompt_text + " " + selected_prompt_lang
 
         if config["is_i_am_studying"]:
@@ -1260,9 +1322,19 @@ setInterval(findAndClickButton, 2000);
             selected_prompt_study = random.choice(random_i_am_studying)
             study_tag = self.get_priority_tag(config)
 
-            if '{}' in selected_prompt_study:
-                selected_prompt_study = selected_prompt_study.replace('{}', study_tag if study_tag else "")
+            if self.template_has_card_field_placeholder(selected_prompt_study, self.last_card_note):
+                prefix_has_card_context = True
+
+            selected_prompt_study = self.build_prompt_text(
+                prompt_template=selected_prompt_study,
+                fallback_text=study_tag if study_tag else "",
+                note=self.last_card_note,
+                prepend_fallback_if_no_placeholder=False,
+            )
             prompt_text  = selected_prompt_study + " " + prompt_text
+
+        if fallback_text and not body_has_card_context and not prefix_has_card_context:
+            prompt_text = fallback_text + prompt_text
 
         now_AI_type = config["now_AI_type"]
 
