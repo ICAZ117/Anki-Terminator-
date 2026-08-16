@@ -14,7 +14,7 @@ try:
         QApplication, QDialog, QFrame, QGroupBox, QHBoxLayout,
         QLineEdit, QRadioButton, QSizePolicy, QMessageBox, QCheckBox,
         QSlider, QTabWidget, QWidget, QVBoxLayout, QLabel,
-        QPushButton, QDoubleSpinBox, QTextBrowser)
+        QPushButton, QDoubleSpinBox, QTextBrowser, QTextEdit)
     from PyQt6.QtCore import Qt, QRectF, QTimer
     from PyQt6.QtGui import QAction, QKeySequence, QPainter, QIcon, QPainterPath, QPixmap
 except Exception as e:
@@ -23,7 +23,7 @@ except Exception as e:
         QApplication, QDialog, QFrame, QGroupBox, QHBoxLayout,
         QLineEdit, QRadioButton, QSizePolicy, QMessageBox, QCheckBox,
         QSlider, QTabWidget, QWidget, QVBoxLayout, QLabel,
-        QPushButton, QDoubleSpinBox, QTextBrowser)
+        QPushButton, QDoubleSpinBox, QTextBrowser, QTextEdit)
     from aqt.qt import Qt, QRectF, QTimer
     from aqt.qt import QAction, QKeySequence, QPainter, QIcon, QPainterPath, QPixmap
 
@@ -54,6 +54,7 @@ SET_SCALEDTOWIDTH = 500
 SET_LINE_EDID_WIDTH = 400
 MAX_LABEL_WIDTH = 80
 MAX_HEIGHT = 500
+MULTI_LINE_EDIT_HEIGHT = 72
 
 ICON_PATH = r"media/sprite/progKnight/config/icon.png"
 BANNER_PATH =r"media/sprite/progKnight/config/banner.jpg"
@@ -94,6 +95,19 @@ RATE_THIS_URL = f"https://ankiweb.net/shared/review/{ADDON_PACKAGE}"
 
 # ---- ﾌｫﾝﾄの設定画面を作成するｸﾗｽ --------
 class SetPopupConfig(QDialog):
+    MULTI_LINE_CONFIG_FIELDS = {
+        "random_prompt",
+        "more_info",
+        "baby_explanation",
+        "word_origin",
+        "make_joke",
+        "history",
+        "synonym",
+        "mnemonic",
+        "i_am_studying",
+        "language",
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -760,13 +774,9 @@ class SetPopupConfig(QDialog):
     def create_line_edits_and_labels(self, list_attr_name, list_items, b_name, b_index=None):
         main_layout = QVBoxLayout()
         items = list_items if isinstance(list_items, list) else [list_items]
-        for i, item in enumerate(items):
-            line_edit = QLineEdit(item)
-            line_edit.textChanged.connect(lambda text,
-                                        i=i,
-                                        name=list_attr_name: self.update_list_item(name, i, text))
-            line_edit.setMaximumWidth(SET_LINE_EDID_WIDTH)
+        use_multiline = list_attr_name in self.MULTI_LINE_CONFIG_FIELDS
 
+        for i, item in enumerate(items):
             if i == 0:
                 layout = QHBoxLayout()
                 if b_index is not None:
@@ -787,12 +797,27 @@ class SetPopupConfig(QDialog):
                 layout = QHBoxLayout()
                 layout.addWidget(label)
 
-            line_edit = QLineEdit(item)
-            line_edit.textChanged.connect(lambda text,
-                                        i=i,
-                                        name=list_attr_name: self.update_list_item(name, i, text))
-            # line_edit.setMaximumWidth(SET_LINE_EDID_WIDTH)
-            layout.addWidget(line_edit)
+            if use_multiline:
+                text_edit = QTextEdit()
+                text_edit.setPlainText(item)
+                text_edit.setFixedHeight(MULTI_LINE_EDIT_HEIGHT)
+                text_edit.setMaximumWidth(SET_LINE_EDID_WIDTH)
+                text_edit.textChanged.connect(
+                    lambda i=i,
+                    name=list_attr_name,
+                    widget=text_edit: self.update_list_item(name, i, widget.toPlainText())
+                )
+                layout.addWidget(text_edit)
+            else:
+                line_edit = QLineEdit(item)
+                line_edit.textChanged.connect(
+                    lambda text,
+                    i=i,
+                    name=list_attr_name: self.update_list_item(name, i, text)
+                )
+                line_edit.setMaximumWidth(SET_LINE_EDID_WIDTH)
+                layout.addWidget(line_edit)
+
             main_layout.addLayout(layout)
         return main_layout
 
